@@ -16,8 +16,25 @@ very dark or strangely tinted images.
 
 See also http://hugin.sourceforge.net/docs/manual/Vig_optimize.html
 
-
 ## TODO
+
+Scripts that are not fully implemented yet.
+
+
+### tile_panorama.sh
+
+Slices a panorama into smaller tiles and optionally uses 
+[vips](https://github.com/libvips/libvips)
+for merging the resulting tiles into a single image.
+
+Hugin uses [enblend](https://wiki.panotools.org/Enblend) for stitching
+panoramas (creating the final large image). Unfortunately enblend has
+a hard time scaling up to hundreds of images and gigapixels size on a
+measly 32GB machine.
+
+Creating multiple smaller tiles is lighter than creating a single
+large image and the tool `vips` is capable of merging these tiles
+into a single image with ease.
 
 ### validate_control_points.sh
 
@@ -25,4 +42,3 @@ Given a grid of images as source for the panorams, this scripts
 validates the control points. It checks that images are connected
 to their neighbours and that they are not connected to other images.
 
-This script is not implemented yet.
