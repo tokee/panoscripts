@@ -2,7 +2,7 @@
 
 
 #
-# 
+# Resets exposure and tint for all images in a panorama.
 #
 
 ###############################################################################

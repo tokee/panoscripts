@@ -2,10 +2,13 @@
 
 
 #
-# 
+# Slices a panorama into smaller tiles at PTO-level, renders the individual tiles
+# using hugin_executor and uses vips (https://github.com/libvips/libvips) for
+# merging the resulting tiles into a single image.
 #
-
-# TODO: Sanity check that there will be more than one slice
+# Use this when direct rendering of a large panorama is not possible using Hugin/enblend
+# due to memory restraints.
+#
 
 ###############################################################################
 # CONFIG
@@ -24,6 +27,7 @@ fi
 : ${WORK_FOLDER:="${OUTPUT_IMAGE%.*}"}
 : ${TILE_DIMENSIONS:="$3"}
 : ${TILE_DIMENSIONS:="16384x16384"}
+: ${CLEANUP:="false"} # If true, intermediate files will be deleted after full processing
 popd > /dev/null
 
 function usage() {
@@ -219,7 +223,11 @@ slice() {
 
     echo ""
     echo "Finished producing $OUTPUT_IMAGE at $(date +%Y%m%d-%H%M%S)"
-    echo "The work folder ${WORK_FOLDER} can be safely deleted"
+    if [[ "$CLEANUP" == "true" ]]; then
+        rm -r "${WORK_FOLDER}"
+    else
+        echo "The work folder ${WORK_FOLDER} can be safely deleted"
+    fi
 }
 
 ###############################################################################
