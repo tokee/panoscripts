@@ -21,12 +21,14 @@ fi
 : ${MERGE:="true"} # If false, the merging of the tiles will be skipped
 : ${PTO:="$1"}
 : ${OUTPUT_IMAGE:="$2"}
+: ${WORK_FOLDER:="${OUTPUT_IMAGE%.*}"}
 : ${TILE_DIMENSIONS:="$3"}
 : ${TILE_DIMENSIONS:="16384x16384"}
 popd > /dev/null
 
 function usage() {
     cat <<EOF
+
 Usage:  ./tile_panorama.sh <pto_file> [output_image] [tile_dimensions]
 Sample: ./tile_panorama.sh large.pto large.tif 2048x2048
 
@@ -73,6 +75,7 @@ check_parameters() {
     fi
     TILE_WIDTH=$(cut -dx -f1 <<< "$TILE_DIMENSIONS")
     TILE_HEIGHT=$(cut -dx -f2 <<< "$TILE_DIMENSIONS")
+    mkdir -p "$WORK_FOLDER"
 }
 
 ################################################################################
@@ -138,15 +141,16 @@ make_tile() {
     local CROP="$1"
     local DEST="$2"
     sed "s/^\(p .*R[0-9]* \)[^ ]*\( \?n.*\)/\1S${CROP}\2/" "$PTO" > slice.pto
-    hugin_executor --stitching --prefix slice.last.tif slice.pto &> slice.log
-    convert slice.last.tif +repage "${DEST}" # Remove fancy TIFF viewports
+    hugin_executor --stitching --prefix ${WORK_FOLDER}/slice.last.tif slice.pto &>> ${WORK_FOLDER}/slice.log
+    convert ${WORK_FOLDER}/slice.last.tif +repage "${DEST}" &>> ${WORK_FOLDER}/slice.log # Remove fancy TIFF viewports
     if [[ ! -s "${DEST}" ]]; then
-        >&2 echo "Error: Slicing did not produce ${DEST} as expected. Please see slice.log for errors"
+        >&2 echo "Error: Slicing did not produce ${DEST} as expected. Please see ${WORK_FOLDER}/slice.log for errors"
         exit 51
     fi
 }
 
 slice() {
+    echo "Starting processing at $(date +%Y%m%d-%H%M%S)"
     stats
     if [[ "$TILES_HORISONTAL" -eq "1" && "$TILES_VERTICAL" -eq "1" ]]; then
         echo "Skipping processing as only a single tile would be output"
@@ -170,7 +174,7 @@ slice() {
             local CROP_BOTTOM="$PTO_CROP_BOTTOM"
         fi
         local TILE="$((X+1))x$((Y+1))"
-        local DEST="${TILE}.tif"
+        local DEST="${WORK_FOLDER}/${TILE}.tif"
         local CROP="${CROP_LEFT},${CROP_RIGHT},${CROP_TOP},${CROP_BOTTOM}"
         if [[ "." == ".$IMAGES" ]]; then
             local IMAGES="$DEST"
@@ -181,7 +185,7 @@ slice() {
         if [[ -s "${DEST}" ]]; then
             echo "${SLICE}/${MAX_SLICES} Skipping tile $TILE as ${DEST} already exists"
         else
-            echo "${SLICE}/${MAX_SLICES} Generating and executing PTO for tile $TILE at crop ${CROP} with dest ${DEST}"
+            echo "${SLICE}/${MAX_SLICES} Generating and executing PTO for tile $TILE at crop ${CROP} with destination ${DEST}"
             make_tile "$CROP" "$DEST"
         fi
         
@@ -193,26 +197,29 @@ slice() {
         local SLICE=$(( SLICE + 1 ))
     done
     
-    if [[ -s uncropped.last.tif ]]; then
-        echo "Skipping merging as uncropped.last.tif already exists"
+    if [[ -s ${WORK_FOLDER}/uncropped.last.tif ]]; then
+        echo "Skipping merging as ${WORK_FOLDER}/uncropped.last.tif already exists"
     else
         echo "Calling merge with"
         echo "> vips arrayjoin \"$IMAGES\" t.tif --across 2"
-        vips arrayjoin "$IMAGES" uncropped.last.tif --across 2
+        vips arrayjoin "$IMAGES" ${WORK_FOLDER}/uncropped.last.tif --across 2
     fi
 
     if [[ -s "$OUTPUT_IMAGE" ]]; then
         echo "Skipping final trimming to ${PTO_CROP_WIDTH}x${PTO_CROP_HEIGHT} as $OUTPUT_IMAGE already exists"
     else        
-        echo "Trimming image to dimensions ${PTO_CROP_WIDTH}x${PTO_CROP_HEIGHT} with command"
-        echo "> vips crop uncropped.last.tif \"$OUTPUT_IMAGE\" 0 0 ${PTO_CROP_WIDTH} ${PTO_CROP_HEIGHT}"
-        vips crop uncropped.last.tif "$OUTPUT_IMAGE" 0 0 ${PTO_CROP_WIDTH} ${PTO_CROP_HEIGHT}
+        echo "Trimming image to dimensions ${PTO_CROP_WIDTH}x${PTO_CROP_HEIGHT} and saving final image with command"
+        echo "> vips crop ${WORK_FOLDER}/uncropped.last.tif \"$OUTPUT_IMAGE\" 0 0 ${PTO_CROP_WIDTH} ${PTO_CROP_HEIGHT}"
+        vips crop ${WORK_FOLDER}/uncropped.last.tif "$OUTPUT_IMAGE" 0 0 ${PTO_CROP_WIDTH} ${PTO_CROP_HEIGHT}
     fi
     if [[ ! -s "$OUTPUT_IMAGE" ]]; then
         >&2 echo "Error: Output image $OUTPUT_IMAGE not produced"
         exit 62
     fi
+
+    echo ""
     echo "Finished producing $OUTPUT_IMAGE at $(date +%Y%m%d-%H%M%S)"
+    echo "The work folder ${WORK_FOLDER} can be safely deleted"
 }
 
 ###############################################################################
