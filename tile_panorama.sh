@@ -20,9 +20,9 @@ if [[ -s "pano.conf" ]]; then
 fi
 : ${MERGE:="true"} # If false, the merging of the tiles will be skipped
 : ${PTO:="$1"}
-: ${OUTPUT:="$2"}
+: ${OUTPUT_IMAGE:="$2"}
 : ${TILE_DIMENSIONS:="$3"}
-: ${TILE_DIMENSIONS:="8192x8192"}
+: ${TILE_DIMENSIONS:="16384x16384"}
 popd > /dev/null
 
 function usage() {
@@ -33,7 +33,7 @@ Sample: ./tile_panorama.sh large.pto large.tif 2048x2048
 pto_file:        A PTO file from Hugin or similar.
 output_image:    The filename for the final large image.
 tile_dimensions: The size of the intermediate tiles to generate.
-                 This is optional, with the default being 8192x8192.
+                 This is optional, with the default being 16384x16384.
 
 If no output_image is given, the script will write the size of the crop area
 specified for the panorama.
@@ -45,6 +45,17 @@ EOF
 }
 
 check_parameters() {
+    for REQUIRED in hugin_executor convert; do
+        if [[ -z $(which $REQUIRED) ]]; then
+            >&2 echo "Error: The tool $REQUIRED must be available. Please install it"
+            exit 61
+        fi
+    done
+    if [[ -z $(which vips) ]]; then
+        >&2 echo "Error: The tool vips must be available. Please install it (try 'sudo apt-get install libvips-tools')"
+        exit 61
+    fi
+        
     if [[ "-h" == "$PTO" ]]; then
         usage
     fi
@@ -84,11 +95,11 @@ get_stats() {
     PTO_HEIGHT=$(sed 's/.* h\([0-9]*\) .*/\1/' <<< "$P")
     PTO_CROP=$(grep -o "S[0-9]\+,[0-9]\+,[0-9]\+,[0-9]\+" <<< "$P" | tr -d S)
 
-    if [[ ! -z "$CROP" ]]; then
+    if [[ ! -z "$PTO_CROP" ]]; then
         PTO_CROP_LEFT=$(cut -d, -f1 <<< "$PTO_CROP")
         PTO_CROP_RIGHT=$(cut -d, -f2 <<< "$PTO_CROP")
-        PTO_CROP_TOP=$(cut -d, -f2 <<< "$PTO_CROP")
-        PTO_CROP_BOTTOM=$(cut -d, -f2 <<< "$PTO_CROP")
+        PTO_CROP_TOP=$(cut -d, -f3 <<< "$PTO_CROP")
+        PTO_CROP_BOTTOM=$(cut -d, -f4 <<< "$PTO_CROP")
     else
         PTO_CROP_LEFT="0"
         PTO_CROP_RIGHT="$PTO_WIDTH"
@@ -99,8 +110,8 @@ get_stats() {
     PTO_CROP_WIDTH=$((PTO_CROP_RIGHT - PTO_CROP_LEFT))
     PTO_CROP_HEIGHT=$((PTO_CROP_BOTTOM - PTO_CROP_TOP))
 
-    TILES_HORISONTAL=$(( (PTO_CROP_WIDTH*2-1)/TILE_WIDTH ))
-    TILES_VERTICAL=$(( (PTO_CROP_HEIGHT*2-1)/TILE_HEIGHT ))
+    TILES_HORISONTAL=$(( (PTO_CROP_WIDTH+TILE_WIDTH-1)/TILE_WIDTH ))
+    TILES_VERTICAL=$(( (PTO_CROP_HEIGHT+TILE_HEIGHT-1)/TILE_HEIGHT ))
     if [[ "$TILES_HORISONTAL" -eq "0" ]]; then
         TILES_HORISONTAL=1
     fi
@@ -118,14 +129,90 @@ stats() {
     if [[ -z "$PTO_CROP" ]]; then
         echo "Crop:   Not present"
     else
-        echo "Crop:   $PTO_CROP (left, right, top, bottom)"
+        echo "Crop:   ${PTO_CROP_LEFT},${PTO_CROP_RIGHT},${PTO_CROP_TOP},${PTO_CROP_BOTTOM} (left, right, top, bottom)"
     fi
     echo "Tiles:  ${TILES_HORISONTAL}x${TILES_VERTICAL} (tile dimensions $TILE_DIMENSIONS)"
 }
 
+make_tile() {
+    local CROP="$1"
+    local DEST="$2"
+    sed "s/^\(p .*R[0-9]* \)[^ ]*\( \?n.*\)/\1S${CROP}\2/" "$PTO" > slice.pto
+    hugin_executor --stitching --prefix slice.last.tif slice.pto &> slice.log
+    convert slice.last.tif +repage "${DEST}" # Remove fancy TIFF viewports
+    if [[ ! -s "${DEST}" ]]; then
+        >&2 echo "Error: Slicing did not produce ${DEST} as expected. Please see slice.log for errors"
+        exit 51
+    fi
+}
+
 slice() {
-    >&2 echo "Error: Slicing not implemented yet"
-    exit 41
+    stats
+    if [[ "$TILES_HORISONTAL" -eq "1" && "$TILES_VERTICAL" -eq "1" ]]; then
+        echo "Skipping processing as only a single tile would be output"
+        exit
+    fi
+    local MAX_SLICES=$(( TILES_VERTICAL * TILES_HORISONTAL ))
+    echo "Creating $MAX_SLICES slices..."
+    local X=0
+    local Y=0
+    local SLICE=1
+    local IMAGES=""
+    while [[ "$Y" -lt "$TILES_VERTICAL" ]]; do
+        local CROP_LEFT=$(( PTO_CROP_LEFT + X*TILE_WIDTH ))
+        local CROP_RIGHT=$(( CROP_LEFT + TILE_WIDTH ))
+        if [[ "$CROP_RIGHT" -gt "$PTO_CROP_RIGHT" ]]; then
+            local CROP_RIGHT="$PTO_CROP_RIGHT"
+        fi
+        local CROP_TOP=$(( PTO_CROP_TOP + Y*TILE_HEIGHT ))
+        local CROP_BOTTOM=$(( CROP_TOP + TILE_HEIGHT ))
+        if [[ "$CROP_BOTTOM" -gt "$PTO_CROP_BOTTOM" ]]; then
+            local CROP_BOTTOM="$PTO_CROP_BOTTOM"
+        fi
+        local TILE="$((X+1))x$((Y+1))"
+        local DEST="${TILE}.tif"
+        local CROP="${CROP_LEFT},${CROP_RIGHT},${CROP_TOP},${CROP_BOTTOM}"
+        if [[ "." == ".$IMAGES" ]]; then
+            local IMAGES="$DEST"
+        else
+            local IMAGES="$IMAGES $DEST"
+        fi
+        
+        if [[ -s "${DEST}" ]]; then
+            echo "${SLICE}/${MAX_SLICES} Skipping tile $TILE as ${DEST} already exists"
+        else
+            echo "${SLICE}/${MAX_SLICES} Generating and executing PTO for tile $TILE at crop ${CROP} with dest ${DEST}"
+            make_tile "$CROP" "$DEST"
+        fi
+        
+        local X=$((X + 1))
+        if [[ "$X" -eq "$TILES_HORISONTAL" ]]; then
+            local X=0
+            local Y=$(( Y + 1 ))
+        fi
+        local SLICE=$(( SLICE + 1 ))
+    done
+    
+    if [[ -s uncropped.last.tif ]]; then
+        echo "Skipping merging as uncropped.last.tif already exists"
+    else
+        echo "Calling merge with"
+        echo "> vips arrayjoin \"$IMAGES\" t.tif --across 2"
+        vips arrayjoin "$IMAGES" uncropped.last.tif --across 2
+    fi
+
+    if [[ -s "$OUTPUT_IMAGE" ]]; then
+        echo "Skipping final trimming to ${PTO_CROP_WIDTH}x${PTO_CROP_HEIGHT} as $OUTPUT_IMAGE already exists"
+    else        
+        echo "Trimming image to dimensions ${PTO_CROP_WIDTH}x${PTO_CROP_HEIGHT} with command"
+        echo "> vips crop uncropped.last.tif \"$OUTPUT_IMAGE\" 0 0 ${PTO_CROP_WIDTH} ${PTO_CROP_HEIGHT}"
+        vips crop uncropped.last.tif "$OUTPUT_IMAGE" 0 0 ${PTO_CROP_WIDTH} ${PTO_CROP_HEIGHT}
+    fi
+    if [[ ! -s "$OUTPUT_IMAGE" ]]; then
+        >&2 echo "Error: Output image $OUTPUT_IMAGE not produced"
+        exit 62
+    fi
+    echo "Finished producing $OUTPUT_IMAGE at $(date +%Y%m%d-%H%M%S)"
 }
 
 ###############################################################################
@@ -133,7 +220,7 @@ slice() {
 ###############################################################################
 
 check_parameters "$@"
-if [[ -z "$OUTPUT" ]]; then
+if [[ -z "$OUTPUT_IMAGE" ]]; then
     stats
 else
     slice
