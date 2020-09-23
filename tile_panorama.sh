@@ -51,15 +51,17 @@ EOF
 }
 
 check_parameters() {
-    for REQUIRED in hugin_executor convert; do
-        if [[ -z $(which $REQUIRED) ]]; then
-            >&2 echo "Error: The tool $REQUIRED must be available. Please install it"
-            exit 61
-        fi
-    done
+    if [[ -z $(which hugin_executor) ]]; then
+        >&2 echo "Error: The tool hugin_executor must be available. Please install it (try 'sudo apt-get install hugin')"
+        exit 61
+    fi
     if [[ -z $(which vips) ]]; then
         >&2 echo "Error: The tool vips must be available. Please install it (try 'sudo apt-get install libvips-tools')"
-        exit 61
+        exit 62
+    fi
+    if [[ -z $(which gm) ]]; then
+        >&2 echo "Error: gm (GraphicsMagic) must be available. Please install it (try 'sudo apt-get install graphicsmagic')"
+        exit 63
     fi
         
     if [[ "-h" == "$PTO" ]]; then
@@ -146,7 +148,7 @@ make_tile() {
     local DEST="$2"
     sed "s/^\(p .*R[0-9]* \)[^ ]*\( \?n.*\)/\1S${CROP}\2/" "$PTO" > slice.pto
     hugin_executor --stitching --prefix ${WORK_FOLDER}/slice.last.tif slice.pto &>> ${WORK_FOLDER}/slice.log
-    convert ${WORK_FOLDER}/slice.last.tif +repage "${DEST}" &>> ${WORK_FOLDER}/slice.log # Remove fancy TIFF viewports
+    gm convert ${WORK_FOLDER}/slice.last.tif +repage "${DEST}" &>> ${WORK_FOLDER}/slice.log # Remove fancy TIFF viewports
     if [[ ! -s "${DEST}" ]]; then
         >&2 echo "Error: Slicing did not produce ${DEST} as expected. Please see ${WORK_FOLDER}/slice.log for errors"
         exit 51
