@@ -43,3 +43,17 @@ Given a grid of images as source for the panorama, this scripts
 validates the control points. It checks that images are connected
 to their neighbours and that they are not connected to other images.
 
+### add_masks.sh
+
+Given a grid of images as source for the panorama, this scripts adds
+exclusion masks to the bottom or to the right of every image, except
+for those at the lowest row or rightmost column respectively.
+
+enblend 4.0 sometimes complain about
+[excessive overlap detected](https://wiki.panotools.org/Hugin_FAQ#enblend:_excessive_overlap_detected)
+without it being possible to remove any images (without leaving
+holes). "Removing" part of the overlap by adding exclusion masks
+solves this problem at the cost of less pixels to blend.
+
+The smaller amount of pixels might be a problem if the different
+has different exposures.
