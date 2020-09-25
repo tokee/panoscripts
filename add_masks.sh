@@ -20,24 +20,31 @@ if [[ -s "pano.conf" ]]; then
 fi
 : ${PTO:="$1"}
 : ${GRID:="$2"}
-: ${MASK1:="$3"}
-: ${MASK2:="$4"}
+: ${DIRECTION:="$3"}
+: ${MASK1:="$4"}
+: ${MASK2:="$5"}
+: ${REMOVE_EXISTING_MASKS:="false"}
 
 popd > /dev/null
 
 function usage() {
     cat <<EOF
 
-Usage:    ./add_masks.sh <pto_file> <grid> <mask> [mask]
+Usage:    ./add_masks.sh <pto_file> <grid> <direction> <mask> [mask]
 
-Sample 1: ./add_masks.sh large_overlap.pto 8x3 r200 > less_overlap.pto
-Sample 2: ./add_masks.sh large_overlap.pto 8x3 r200 b200 > even_less_overlap.pto
+Sample 1: ./add_masks.sh large_overlap.pto 8x3 td r200 > less_overlap.pto
+Sample 2: ./add_masks.sh another.pto 12x5 lr r200 b200 > lesser_overlap.pto
 
-grid: The layout of the panorama as WidthxHeight where width and height are
-      measured in images. A panorama of 6 images can be 1x6, 2x3, 3x2 or 6x1.
-mask: rXXXX or bXXXX, where r=right, b=bottom and XXXX is the amount of pixels.
+grid:      The layout of the panorama as WidthxHeight where width and height
+           are measured in images. A panorama of 6 images can be 1x6, 2x3, 
+           3x2 or 6x1.
+direction: How the grid of images was taken: td (top-down) first or 
+           lr (left-right) first.
+mask:      rXXXX or bXXXX, where r=right, b=bottom and XXXX is the amount of
+           pixels.
 
-If no grid or mask is given, the amount of images in the panorams is printed.
+If no grid, direction or mask is given, the amount of images in the panorams is
+printed.
 
 Given a grid of images as source for the panorama, this scripts adds
 exclusion masks to the bottom or to the right of every image, except
@@ -58,6 +65,24 @@ check_parameters() {
         >&2 echo "Error: Unable to locate $PTO"
         usage 3
     fi
+}
+
+trim_check_parameters() {
+    if [[ -z "$GRID" ]]; then
+        >&2 echo "Error: No grid specified"
+        usage 4
+    fi
+    if [[ -z "$DIRECTION" ]]; then
+        >&2 echo "Error: No direction specified"
+        usage 4
+    elif [[ "td" != "$DIRECTION" && "lt" != "$DIRECTION" ]]; then
+        >&2 echo "Error: The direction must be either 'td' or 'lr' but was '$DIRECTION'"
+        usage 5
+    fi
+    if [[ -z "$DIRECTION" ]]; then
+        >&2 echo "Error: No mask specified"
+        usage 7
+    fi    
 }
 
 ################################################################################
@@ -117,27 +142,45 @@ trim() {
     resolve_masks
 
     #echo "Adding mask_right=$MASK_RIGHT and mask_bottom=$MASK_BOTTOM to the ${GRID_WIDTH}x${GRID_HEIGHT} grid panorama $PTO"
-    cat "$PTO"
+    if [[ "true" == "$REMOVE_EXISTING_MASKS" ]]; then
+        cat "$PTO" | grep -v "^#masks" | grep -v "^k"
+    else
+        cat "$PTO"
+    fi
     echo "#masks"
     local COL=1
     local ROW=1
-    while read -r LINE; do
-        local IMAGE="$(grep "^i" <<< "$LINE")"
-        if [[ -< "$IMAGE" ]]; then
-            continue
-        fi
-        local IMAGE_WIDTH=$(cut -d\  -f1 | tr -dw)
-        local IMAGE_HEIGHT=$(cut -d\  -f1 | tr -dh)
+    local IMAGE_ID=0
+    while read -r IMAGE; do
+        local IMAGE_WIDTH=$(cut -d\  -f2 <<< "$IMAGE" | tr -d w)
+        local IMAGE_HEIGHT=$(cut -d\  -f3 <<< "$IMAGE" | tr -d h)
 
-        ########### Needs to be aware if it's top-down or left-right first
-        COL
+        if [[ "$MASK_RIGHT" -gt 0 && "$COL" -ne "$GRID_WIDTH" ]]; then
+            #echo "At ${COL}x${ROW} make right mask $MASK_RIGHT"
+            echo "k i${IMAGE_ID} t0 p\"$((IMAGE_WIDTH-MASK_RIGHT)) 0 $IMAGE_WIDTH 0 $((IMAGE_WIDTH-MASK_RIGHT)) $IMAGE_HEIGHT $IMAGE_WIDTH $IMAGE_HEIGHT\"" 
+        fi
+        if [[ "$MASK_BOTTOM" -gt 0 && "$ROW" -ne "$GRID_HEIGHT" ]]; then
+            #echo "At ${COL}x${ROW} make bottom mask $MASK_BOTTOM"
+            echo "k i${IMAGE_ID} t0 p\"0 $((IMAGE_HEIGHT-MASK_BOTTOM)) $IMAGE_WIDTH $((IMAGE_HEIGHT-MASK_BOTTOM)) 0 $IMAGE_HEIGHT IMAGE_WIDTH $IMAGE_HEIGHT\"" 
+        fi
         
-    done < "$PTO"
-    while [[ "$ROW" -le "$GRID_HEIGHT" ]]; do
-        if [[ "$COL" -lt "$GRID_WIDTH" && "$MASK_RIGHT" -gt "0" ]]; then
-            
-    done
-    
+        # cut is not on edge
+        
+        if [[ "td" == "$DIRECTION" ]]; then
+            ROW=$(( ROW + 1 ))
+            if [[ "$ROW" -gt "$GRID_HEIGHT" ]]; then
+                ROW=1
+                COL=$(( COL + 1 ))
+            fi
+        else # lr
+            COL=$(( COL + 1 ))
+            if [[ "$COL" -gt "$GRID_WIDTH" ]]; then
+                COL=1
+                ROW=$(( ROW + 1 ))
+            fi
+        fi
+        local IMAGE_ID=$(( IMAGE_ID + 1 ))
+    done <<< $(grep "^i" < "$PTO")
 }
 
 ###############################################################################
@@ -148,5 +191,6 @@ check_parameters "$@"
 if [[ -z "$GRID" ]]; then
     image_count
 else
+    trim_check_parameters "$@"
     trim
 fi
