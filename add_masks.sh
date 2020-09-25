@@ -157,11 +157,11 @@ trim() {
 
         if [[ "$MASK_RIGHT" -gt 0 && "$COL" -ne "$GRID_WIDTH" ]]; then
             #echo "At ${COL}x${ROW} make right mask $MASK_RIGHT"
-            echo "k i${IMAGE_ID} t0 p\"$((IMAGE_WIDTH-MASK_RIGHT)) 0 $IMAGE_WIDTH 0 $((IMAGE_WIDTH-MASK_RIGHT)) $IMAGE_HEIGHT $IMAGE_WIDTH $IMAGE_HEIGHT\"" 
+            echo "k i${IMAGE_ID} t0 p\"$((IMAGE_WIDTH-MASK_RIGHT)) 0 $IMAGE_WIDTH 0 $IMAGE_WIDTH $IMAGE_HEIGHT $((IMAGE_WIDTH-MASK_RIGHT)) $IMAGE_HEIGHT\"" 
         fi
         if [[ "$MASK_BOTTOM" -gt 0 && "$ROW" -ne "$GRID_HEIGHT" ]]; then
             #echo "At ${COL}x${ROW} make bottom mask $MASK_BOTTOM"
-            echo "k i${IMAGE_ID} t0 p\"0 $((IMAGE_HEIGHT-MASK_BOTTOM)) $IMAGE_WIDTH $((IMAGE_HEIGHT-MASK_BOTTOM)) 0 $IMAGE_HEIGHT IMAGE_WIDTH $IMAGE_HEIGHT\"" 
+            echo "k i${IMAGE_ID} t0 p\"0 $((IMAGE_HEIGHT-MASK_BOTTOM)) $IMAGE_WIDTH $((IMAGE_HEIGHT-MASK_BOTTOM)) $IMAGE_WIDTH $IMAGE_HEIGHT 0 $IMAGE_HEIGHT\"" 
         fi
         
         # cut is not on edge
