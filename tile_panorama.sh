@@ -207,8 +207,8 @@ slice() {
         echo "Skipping merging as ${WORK_FOLDER}/uncropped.last.tif already exists"
     else
         echo "Calling merge with"
-        echo "> vips arrayjoin \"$IMAGES\" t.tif --across 2"
-        vips arrayjoin "$IMAGES" ${WORK_FOLDER}/uncropped.last.tif --across 2
+        echo "> vips arrayjoin \"$IMAGES\" t.tif --across $TILES_HORISONTAL"
+        vips arrayjoin "$IMAGES" ${WORK_FOLDER}/uncropped.last.tif --across $TILES_HORISONTAL
     fi
 
     if [[ -s "$OUTPUT_IMAGE" ]]; then
