@@ -50,6 +50,11 @@ has different exposures.
 
 Scripts that are not implemented yet.
 
+### make_presentaion.sh
+
+Given a finished panorama bitmap (or any bitmap), this script cuts
+it into DeepZoom tiles using vips and creates a web page where the
+panorama is displayed using OpenSeadragon.
 
 ### validate_control_points.sh
 
