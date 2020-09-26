@@ -31,18 +31,6 @@ Creating multiple smaller tiles is lighter than creating a single
 large image and the tool `vips` is capable of merging these tiles
 into a single image with ease.
 
-
-## TODO
-
-Scripts that are not implemented yet.
-
-
-### validate_control_points.sh
-
-Given a grid of images as source for the panorama, this scripts
-validates the control points. It checks that images are connected
-to their neighbours and that they are not connected to other images.
-
 ### add_masks.sh
 
 Given a grid of images as source for the panorama, this scripts adds
@@ -57,3 +45,15 @@ solves this problem at the cost of less pixels to blend.
 
 The smaller amount of pixels might be a problem if the different
 has different exposures.
+
+## TODO
+
+Scripts that are not implemented yet.
+
+
+### validate_control_points.sh
+
+Given a grid of images as source for the panorama, this scripts
+validates the control points. It checks that images are connected
+to their neighbours and that they are not connected to other images.
+
