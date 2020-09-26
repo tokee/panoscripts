@@ -224,7 +224,7 @@ slice() {
         if [[ -s "${DEST}" ]]; then
             echo "${SLICE}/${MAX_SLICES} Skipping tile $TILE as ${DEST} already exists"
         else
-            echo "${SLICE}/${MAX_SLICES} Generating and executing PTO for tile $TILE at crop ${CROP} with destination ${DEST}"
+            echo "${SLICE}/${MAX_SLICES} Generating and executing PTO for tile $TILE at crop ${CROP_PLAIN} with destination ${DEST}"
             make_tile "$CROP_OVERLAP" "$CROP_REMOVE_OVERLAP" "$DEST"
         fi
         
