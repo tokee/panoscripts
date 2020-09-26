@@ -27,6 +27,8 @@ fi
 : ${WORK_FOLDER:="${OUTPUT_IMAGE%.*}"}
 : ${TILE_DIMENSIONS:="$3"}
 : ${TILE_DIMENSIONS:="16384x16384"}
+: ${OVERLAP:="1000"} # Needed to avoid visible seams
+
 : ${CLEANUP:="false"} # If true, intermediate files will be deleted after full processing
 popd > /dev/null
 
@@ -133,22 +135,25 @@ stats() {
     get_stats
     
     echo "Panorama $PTO"
-    echo "Width:  $PTO_WIDTH"
-    echo "Height: $PTO_HEIGHT"
+    echo "Width:   $PTO_WIDTH"
+    echo "Height:  $PTO_HEIGHT"
     if [[ -z "$PTO_CROP" ]]; then
-        echo "Crop:   Not present"
+        echo "Crop:    Not present"
     else
-        echo "Crop:   ${PTO_CROP_LEFT},${PTO_CROP_RIGHT},${PTO_CROP_TOP},${PTO_CROP_BOTTOM} (left, right, top, bottom)"
+        echo "Crop:    ${PTO_CROP_LEFT},${PTO_CROP_RIGHT},${PTO_CROP_TOP},${PTO_CROP_BOTTOM} (left, right, top, bottom)"
     fi
-    echo "Tiles:  ${TILES_HORISONTAL}x${TILES_VERTICAL} (tile dimensions $TILE_DIMENSIONS)"
+    echo "Overlap: $OVERLAP"
+    echo "Tiles:   ${TILES_HORISONTAL}x${TILES_VERTICAL} (tile dimensions $TILE_DIMENSIONS)"
 }
 
 make_tile() {
     local CROP="$1"
-    local DEST="$2"
+    local REMOVE_OVERLAP_CROP="$2"
+    local DEST="$3"
     sed "s/^\(p .*R[0-9]* \)[^ ]*\( \?n.*\)/\1S${CROP}\2/" "$PTO" > slice.pto
     hugin_executor --stitching --prefix ${WORK_FOLDER}/slice.last.tif slice.pto &>> ${WORK_FOLDER}/slice.log
-    gm convert ${WORK_FOLDER}/slice.last.tif +repage "${DEST}" &>> ${WORK_FOLDER}/slice.log # Remove fancy TIFF viewports
+    gm convert ${WORK_FOLDER}/slice.last.tif +repage ${WORK_FOLDER}/slice_sans_overlap.last.tif &>> ${WORK_FOLDER}/slice.log # Remove fancy TIFF viewports
+    vips crop ${WORK_FOLDER}/slice_sans_overlap.last.tif ${DEST} $REMOVE_OVERLAP_CROP
     if [[ ! -s "${DEST}" ]]; then
         >&2 echo "Error: Slicing did not produce ${DEST} as expected. Please see ${WORK_FOLDER}/slice.log for errors"
         exit 51
@@ -169,6 +174,7 @@ slice() {
     local SLICE=1
     local IMAGES=""
     while [[ "$Y" -lt "$TILES_VERTICAL" ]]; do
+        # Calculate the crop without overlap
         local CROP_LEFT=$(( PTO_CROP_LEFT + X*TILE_WIDTH ))
         local CROP_RIGHT=$(( CROP_LEFT + TILE_WIDTH ))
         if [[ "$CROP_RIGHT" -gt "$PTO_CROP_RIGHT" ]]; then
@@ -179,9 +185,36 @@ slice() {
         if [[ "$CROP_BOTTOM" -gt "$PTO_CROP_BOTTOM" ]]; then
             local CROP_BOTTOM="$PTO_CROP_BOTTOM"
         fi
+
+        # Add overlap to crop, where possible
+        local CROP_LEFT_OVERLAP=$((CROP_LEFT-OVERLAP))
+        if [[ "$CROP_LEFT_OVERLAP" -lt "$PTO_CROP_LEFT" ]]; then
+            local CROP_LEFT_OVERLAP="$PTO_CROP_LEFT"
+        fi
+        local CROP_TOP_OVERLAP=$((CROP_TOP-OVERLAP))
+        if [[ "$CROP_TOP_OVERLAP" -lt "$PTO_CROP_TOP" ]]; then
+            local CROP_TOP_OVERLAP="$PTO_CROP_TOP"
+        fi
+        local CROP_RIGHT_OVERLAP=$((CROP_RIGHT+OVERLAP))
+        if [[ "$CROP_RIGHT_OVERLAP" -gt "$PTO_CROP_RIGHT" ]]; then
+            CROP_RIGHT_OVERLAP="$PTO_CROP_RIGHT"
+        fi
+        local CROP_BOTTOM_OVERLAP=$((CROP_BOTTOM+OVERLAP))
+        if [[ "$CROP_BOTTOM_OVERLAP" -gt "$PTO_CROP_BOTTOM" ]]; then
+            CROP_BOTTOM_OVERLAP="$PTO_CROP_BOTTOM"
+        fi
+
+        # Calculate coordinates or trimming the tile with overlap
+        # back to the wanted crop
+        # https://github.com/janko/image_processing/blob/master/doc/vips.md#crop
+        local CROP_REMOVE_OVERLAP="$((CROP_LEFT-CROP_LEFT_OVERLAP)) $((CROP_TOP-CROP_TOP_OVERLAP)) $((CROP_RIGHT-CROP_LEFT)) $((CROP_BOTTOM-CROP_TOP))"
+        
         local TILE="$((X+1))x$((Y+1))"
         local DEST="${WORK_FOLDER}/${TILE}.tif"
-        local CROP="${CROP_LEFT},${CROP_RIGHT},${CROP_TOP},${CROP_BOTTOM}"
+        local CROP_PLAIN="${CROP_LEFT},${CROP_RIGHT},${CROP_TOP},${CROP_BOTTOM}"
+        local CROP_OVERLAP="${CROP_LEFT_OVERLAP},${CROP_RIGHT_OVERLAP},${CROP_TOP_OVERLAP},${CROP_BOTTOM_OVERLAP}"
+
+        
         if [[ "." == ".$IMAGES" ]]; then
             local IMAGES="$DEST"
         else
@@ -192,7 +225,7 @@ slice() {
             echo "${SLICE}/${MAX_SLICES} Skipping tile $TILE as ${DEST} already exists"
         else
             echo "${SLICE}/${MAX_SLICES} Generating and executing PTO for tile $TILE at crop ${CROP} with destination ${DEST}"
-            make_tile "$CROP" "$DEST"
+            make_tile "$CROP_OVERLAP" "$CROP_REMOVE_OVERLAP" "$DEST"
         fi
         
         local X=$((X + 1))
