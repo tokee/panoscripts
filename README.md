@@ -2,6 +2,13 @@
 
 Scripts and notes for making panoramas from multiple images
 
+Requirements:
+ * bash
+ * hugin (for `tile_panorama.sh`)
+ * vips (for `tile_panorama.sh` and `make_presentation.sh`)
+ * GraphicsMagic (for `tile_panorama.sh`)
+ * wget (for `make_presentation.sh`)
+
 ## Scripts
 
 ### reset_exposure.sh
@@ -30,6 +37,13 @@ a hard time scaling up to hundreds of images and gigapixels size on a
 Creating multiple smaller tiles is lighter than creating a single
 large image and the tool `vips` is capable of merging these tiles
 into a single image with ease.
+
+The challenge here is to avoid visible seams between the tiles. This is done
+by having an intermediate overlap between tiles. It has not been researched
+how large that overlap should be and it probably depends on the image.
+The driving problem that leas to this script was a 160000x12924 pixel 
+image and when cut into tiles of 16284x16384 pixels, an overlap of 8000
+was needed to make the seams invisible.
 
 ### add_masks.sh
 
