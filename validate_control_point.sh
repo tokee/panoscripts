@@ -47,12 +47,11 @@ If no grid is given, the amount of images in the panorams is printed.
 Given a grid of images as source for the panorama, this scripts
 validates the control points by checking that
 
+* Images are connected to at least one neighbour
 * Images are not connected to other images that they should not be connected to
-
 
 To be implemented in future versions:
 
-* Images are connected to their neighbours
 * Horizontal and vertical lines does not differ from the mean by more than X percent
 
 EOF
@@ -143,6 +142,7 @@ validate() {
     local LINKS=$(extract_links)
     echo "Calculating IDs for connected images that should not be connected..."
 
+    local UNCONNECTED=""
     local REMOVABLES=""
     local COL=1
     local ROW=1
@@ -180,9 +180,9 @@ validate() {
         # Get the real connections
         local END_POINTS=$(grep "^$ID " "$LINKS" | cut -d\  -f2)
         local FAULTY=$(grep -v "$VALIDS" <<< "$END_POINTS" | tr '\n' ' ')
-        #local OKAY=$(grep "$VALIDS" <<< "$END_POINTS" | tr '\n' ' ')
+        local OKAY=$(grep "$VALIDS" <<< "$END_POINTS" | tr '\n' ' ')
 
-        if [[ ! -z "$FAULTY" ]]; then
+        if [[ ! -z "$FAULTY" && ! " " == "$FAULTY" ]]; then
             ANY=true
             for F in $FAULTY; do
                 if [[ ! -z "$REMOVABLES" ]]; then
@@ -193,6 +193,13 @@ validate() {
             done
             echo "$ID: $FAULTY"
         fi
+        if [[ -z "$OKAY" ]]; then
+            if [[ ! -z "$UNCONNECTED" ]]; then
+                UNCONNECTED="${UNCONNECTED}, "
+            fi
+            UNCONNECTED="${UNCONNECTED}$ID"
+        fi
+        
 
         if [[ "td" == "$DIRECTION" ]]; then
             ROW=$(( ROW + 1 ))
@@ -216,7 +223,12 @@ validate() {
         echo "The control points for the wrongly connected images has been removed and"
         echo "the result has been stored as ${FIXED_PTO}"
     fi
-    
+    if [[ -z "$UNCONNECTED" ]]; then
+        echo "There were no unconnected images"
+    else
+        echo "Warning: There were unconnected images with IDs: $UNCONNECTED"
+        echo "These must be connected to other images for the panorama to render properly"
+    fi
     rm "$LINKS"
 }
 

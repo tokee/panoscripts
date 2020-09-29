@@ -75,4 +75,4 @@ validates the control points by checking that
 * Images are not connected to other images that they should not be connected to
 * Horizontal and vertical lines does not differ from the mean by more than X percent
 
-Note: This script is not fully implemented yet!
+Note: The check for horizontal and vertical lines has not been implemented yet
