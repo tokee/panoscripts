@@ -66,10 +66,6 @@ Given a finished panorama bitmap (or any bitmap), this script cuts
 it into DeepZoom tiles using vips and creates a web page where the
 panorama is displayed using OpenSeadragon.
 
-## TODO
-
-Scripts that are not implemented yet.
-
 ### validate_control_points.sh
 
 Given a grid of images as source for the panorama, this scripts
@@ -78,3 +74,5 @@ validates the control points by checking that
 * Images are connected to their neighbours
 * Images are not connected to other images that they should not be connected to
 * Horizontal and vertical lines does not differ from the mean by more than X percent
+
+Note: This script is not fully implemented yet!
