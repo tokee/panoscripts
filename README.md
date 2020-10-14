@@ -11,7 +11,7 @@ Requirements:
 
 ## Scripts
 
-### reset_exposure.sh
+### reset\_exposure.sh
 
 Resets exposure and tint for all images in a panorama.
 
@@ -23,7 +23,7 @@ very dark or strangely tinted images.
 
 See also http://hugin.sourceforge.net/docs/manual/Vig_optimize.html
 
-### tile_panorama.sh
+### tile\_panorama.sh
 
 Slices a panorama into smaller tiles at PTO-level, renders the individual
 tiles using hugin_executor and uses [vips](https://github.com/libvips/libvips)
@@ -45,7 +45,7 @@ The driving problem that leas to this script was a 160000x12924 pixel
 image and when cut into tiles of 16284x16384 pixels, an overlap of 8000
 was needed to make the seams invisible.
 
-### add_masks.sh
+### add\_masks.sh
 
 Given a grid of images as source for the panorama, this scripts adds
 exclusion masks to the bottom or to the right of every image, except
@@ -60,13 +60,13 @@ solves this problem at the cost of less pixels to blend.
 The smaller amount of pixels might be a problem if the different
 has different exposures.
 
-### make_presentaion.sh
+### make\_presentation.sh
 
 Given a finished panorama bitmap (or any bitmap), this script cuts
 it into DeepZoom tiles using vips and creates a web page where the
 panorama is displayed using OpenSeadragon.
 
-### validate_control_points.sh
+### validate\_control\_points.sh
 
 Given a grid of images as source for the panorama, this scripts
 validates the control points by checking that
@@ -76,3 +76,17 @@ validates the control points by checking that
 * Horizontal and vertical lines does not differ from the mean by more than X percent
 
 Note: The check for horizontal and vertical lines has not been implemented yet
+
+### find\_grid\_control\_points.sh
+
+Given a grid of images as source for the panorama, this scripts
+creates a PTO-project, adjusts the image positions to overlap where
+the grid dictates there should be overlap and calls `cpfind` with
+the [prealigned option](https://wiki.panotools.org/Cpfind#Matching_overlapping_images_.28prealigned_panorama.29)
+which only detects control points for overlapping images.
+
+This should be markedly faster and with a lot fewer false positives
+than the default no-assumptions control point search.
+
+This script is an adaption from a [rex-script by "mfc"](https://groups.google.com/d/msg/hugin-ptx/ImcaDTH7KMY/GcHI-wNnFAAJ).
+
