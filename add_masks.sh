@@ -79,7 +79,7 @@ trim_check_parameters() {
         >&2 echo "Error: The direction must be either 'td' or 'lr' but was '$DIRECTION'"
         usage 5
     fi
-    if [[ -z "$DIRECTION" ]]; then
+    if [[ -z "$MASK1" ]]; then
         >&2 echo "Error: No mask specified"
         usage 7
     fi    
