@@ -134,6 +134,9 @@ check_parameters() {
 # FUNCTIONS
 ################################################################################
 
+out() {
+    echo " - $(date +%Y%m%d-%H%M%S): $1"
+}
 
 image_count() {
     echo "Images: $IMAGE_COUNT"
@@ -225,7 +228,7 @@ get_stats() {
 
 
 calc_setup() {
-    echo " - Calculating setup from LENS=$LENS and $TOTAL_IMAGES images ordered $DIRECTION"
+    out "Calculating setup from LENS=$LENS and $TOTAL_IMAGES images ordered $DIRECTION"
     #-- calculate total degrees vertical and horizontal
     # h=2*arctan((27*aspect) / (2*lens)) -- sensor horizontal degrees
     # v=2*arctan(27 / (2*lens))          -- ditto vertical
@@ -276,7 +279,7 @@ calc_setup() {
 }
 
 generate_profile() {
-    echo " - Generating and adjusting Hugin project file '$PTO'"
+    out "Generating initial Hugin project file '$PTO'"
     if [[ -s "$PTO" ]]; then
         rm "$PTO"
     fi
@@ -319,7 +322,7 @@ generate_profile() {
 }
 
 process_profile() {
-    echo " - Finding control points using cpfind for '$PTO'"
+    out "Finding control points using cpfind for '$PTO'"
     # -- find control points
     #'cpfind --output='profile '--prealigned' profile
     cpfind --output="$PTO" --prealigned "$PTO"
@@ -327,35 +330,36 @@ process_profile() {
 
     # TODO: Check that points were added
     
-    echo " - Adding missing control points using geocpset for '$PTO'"
+    out "Adding missing control points using geocpset for '$PTO'"
     #-- add missing control points using geometry
     geocpset --output="$PTO" "$PTO"
     cp "$PTO" "h3-geocpset.pto"
 
-    #echo " - Finding vertical lines using linefind for '$PTO'"
+    #out "Finding vertical lines using linefind for '$PTO'"
     
-    echo " - Performing alignment autooptimizer for '$PTO'"
+    out "Performing alignment autooptimizer for '$PTO'"
     autooptimiser -a -l -s -o "$PTO" "$PTO"
     #    hugin_executor --assistant profile.pto
     cp "$PTO" "h4-autooptimizer.pto"
 
-    echo " - Performing straighten, auto crop and similar polishing for '$PTO'"
+    out "Performing straighten, auto crop and similar polishing for '$PTO'"
     pano_modify -o "$PTO" --center --straighten --canvas=AUTO --crop=AUTO "$PTO"
     cp "$PTO" "h5-center-crop-straighten.pto"
 
     # TODO: Consider linefind
 
     get_stats
+    out "Finished pre-processing"
     cat <<EOF
-Finished pre-processing. Please use Hugin to inspect
-$PTO
+Please use Hugin to inspect the project
+hugin $PTO
 
 Consider optimizing photometric parameters if the exposure was not fixed.
 
 The finished panorama will be ${PTO_CROP_WIDTH}x${PTO_CROP_HEIGHT} pixels.
 Render the panorama from Hugin or call
 hugin_executor --stitching $PTO --prefix=\"$OUTPUT_PREFIX\"
-or use tiled rendering if the image is too large for the machine
+or use tiled rendering, if the image is too large for the machine, with
 ./tile_panorama.sh $PTO ${OUTPUT_PREFIX}.tif
 EOF
     
@@ -369,7 +373,7 @@ EOF
 ###############################################################################
 
 check_parameters "$@"
-echo "Processing $TOTAL_IMAGES in grid ${GRID_WIDTH}x${GRID_HEIGHT} ordered $DIRECTION"
+out "Processing $TOTAL_IMAGES images in grid ${GRID_WIDTH}x${GRID_HEIGHT} ordered $DIRECTION"
 calc_setup
 generate_profile
 process_profile
