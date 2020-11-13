@@ -86,6 +86,15 @@ check_parameters() {
     local GRID_IMAGES=$(( GRID_WIDTH * GRID_HEIGHT ))
     if [[ "$GRID_IMAGES" -ne "$IMAGE_COUNT" ]]; then
         >&2 echo "Error: The defined grid ${GRID_WIDTH}x${GRID_HEIGHT} requires ${GRID_IMAGES} images, while the panorama contains $IMAGE_COUNT"
+        >&2 echo -n "Possible valid grids are:"
+        for W in $(seq $IMAGE_COUNT -1 1); do
+            local H=$(( IMAGE_COUNT / W ))
+            if [[ $(( W*H )) -ne "$IMAGE_COUNT" ]]; then
+                continue
+            fi
+            >&2 echo -n " ${W}x${H}"
+        done
+        echo ""
         usage 11
     fi
     
@@ -328,7 +337,12 @@ process_profile() {
     cpfind --output="$PTO" --prealigned "$PTO"
     cp "$PTO" "h2-cpfind.pto"
 
-    # TODO: Check that points were added
+    if [[ $(grep "^c" < "h2-cpfind.pto" | wc -l) -eq "0" ]]; then
+        out "Error: No control point found when producing h2-cpfind.pto"
+        out "Maybe cpfind ran out of memory? Attempted command was"
+        out "cpfind --output=\"$PTO\" --prealigned \"$PTO\""
+        exit 50
+    fi
     
     out "Adding missing control points using geocpset for '$PTO'"
     #-- add missing control points using geometry
@@ -336,15 +350,27 @@ process_profile() {
     cp "$PTO" "h3-geocpset.pto"
 
     #out "Finding vertical lines using linefind for '$PTO'"
-    
-    out "Performing alignment autooptimizer for '$PTO'"
+
+    # Aligning before running cpclean should (guessing here)
+    # give better estimates of large error distances
+    out "Performing alignment autooptimizer run 1/2 for '$PTO'"
+    autooptimiser -a -s -o "$PTO" "$PTO"
+    #    hugin_executor --assistant profile.pto
+    cp "$PTO" "h4-autooptimizer1.pto"
+
+    out "Removing control points with large error distances with cpclean for '$PRO'"
+    cpclean -o "$PTO" "$PTO"
+    cp "$PTO" "h5-cpclean.pto"
+
+    # Need to re-align after cpclean to benefit from it
+    out "Performing alignment autooptimizer run 2/2 for '$PTO'"
     autooptimiser -a -l -s -o "$PTO" "$PTO"
     #    hugin_executor --assistant profile.pto
-    cp "$PTO" "h4-autooptimizer.pto"
+    cp "$PTO" "h6-autooptimizer2.pto"
 
     out "Performing straighten, auto crop and similar polishing for '$PTO'"
     pano_modify -o "$PTO" --center --straighten --canvas=AUTO --crop=AUTO "$PTO"
-    cp "$PTO" "h5-center-crop-straighten.pto"
+    cp "$PTO" "h7-center-crop-straighten.pto"
 
     # TODO: Consider linefind
 
