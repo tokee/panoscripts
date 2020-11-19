@@ -90,3 +90,11 @@ than the default no-assumptions control point search.
 
 This script is an adaption from a [rex-script by "mfc"](https://groups.google.com/d/msg/hugin-ptx/ImcaDTH7KMY/GcHI-wNnFAAJ).
 
+
+## Notes
+
+Generate a preview image of width 20000 from a large image using `vips`:
+
+```
+vips thumbnail in.tif 'out.jpg[Q=80,strip]' 20000
+```
