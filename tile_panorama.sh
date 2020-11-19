@@ -150,7 +150,7 @@ make_tile() {
     local CROP="$1"
     local REMOVE_OVERLAP_CROP="$2"
     local DEST="$3"
-    sed "s/^\(p .*R[0-9]* \)[^ ]*\( \?n.*\)/\1S${CROP}\2/" "$PTO" > slice.pto
+    sed "s/^\(p .*R[0-9]* \)[^ ]*\( \?n.*\)/\1S${CROP} \2/" "$PTO" > slice.pto
     hugin_executor --stitching --prefix ${WORK_FOLDER}/slice.last.tif slice.pto &>> ${WORK_FOLDER}/slice.log
     gm convert ${WORK_FOLDER}/slice.last.tif +repage ${WORK_FOLDER}/slice_sans_overlap.last.tif &>> ${WORK_FOLDER}/slice.log # Remove fancy TIFF viewports
     vips crop ${WORK_FOLDER}/slice_sans_overlap.last.tif ${DEST} $REMOVE_OVERLAP_CROP
@@ -160,7 +160,8 @@ make_tile() {
     fi
 }
 
-slice() {
+# Output: Images
+create_slices() {
     echo "Starting processing at $(date +%Y%m%d-%H%M%S)"
     stats
     if [[ "$TILES_HORISONTAL" -eq "1" && "$TILES_VERTICAL" -eq "1" ]]; then
@@ -172,7 +173,7 @@ slice() {
     local X=0
     local Y=0
     local SLICE=1
-    local IMAGES=""
+    IMAGES=""
     while [[ "$Y" -lt "$TILES_VERTICAL" ]]; do
         # Calculate the crop without overlap
         local CROP_LEFT=$(( PTO_CROP_LEFT + X*TILE_WIDTH ))
@@ -213,16 +214,15 @@ slice() {
         local DEST="${WORK_FOLDER}/${TILE}.tif"
         local CROP_PLAIN="${CROP_LEFT},${CROP_RIGHT},${CROP_TOP},${CROP_BOTTOM}"
         local CROP_OVERLAP="${CROP_LEFT_OVERLAP},${CROP_RIGHT_OVERLAP},${CROP_TOP_OVERLAP},${CROP_BOTTOM_OVERLAP}"
-
         
         if [[ "." == ".$IMAGES" ]]; then
-            local IMAGES="$DEST"
+            IMAGES="$DEST"
         else
-            local IMAGES="$IMAGES $DEST"
+            IMAGES="$IMAGES $DEST"
         fi
         
         if [[ -s "${DEST}" ]]; then
-            echo "${SLICE}/${MAX_SLICES} Skipping tile $TILE as ${DEST} already exists"
+            echo "${SLICE}/${MAX_SLICES} Skipping tile $TILE as ${DEST} already exists (crop ${CROP_PLAIN})"
         else
             echo "${SLICE}/${MAX_SLICES} Generating and executing PTO for tile $TILE at crop ${CROP_PLAIN} with destination ${DEST}"
             make_tile "$CROP_OVERLAP" "$CROP_REMOVE_OVERLAP" "$DEST"
@@ -235,26 +235,45 @@ slice() {
         fi
         local SLICE=$(( SLICE + 1 ))
     done
-    
+
+}
+
+# Requirements: IMAGES, TILES_HORISONTAL
+merge_slices() {
     if [[ -s ${WORK_FOLDER}/uncropped.last.tif ]]; then
         echo "Skipping merging as ${WORK_FOLDER}/uncropped.last.tif already exists"
+        echo "The command for joining the tiles would have been"
+        echo "> vips arrayjoin \"$IMAGES\" t.tif --across $TILES_HORISONTAL"
     else
         echo "Calling merge with"
         echo "> vips arrayjoin \"$IMAGES\" t.tif --across $TILES_HORISONTAL"
         vips arrayjoin "$IMAGES" ${WORK_FOLDER}/uncropped.last.tif --across $TILES_HORISONTAL
     fi
+}
 
+trim_image() {
+    get_stats
+    
     if [[ -s "$OUTPUT_IMAGE" ]]; then
         echo "Skipping final trimming to ${PTO_CROP_WIDTH}x${PTO_CROP_HEIGHT} as $OUTPUT_IMAGE already exists"
+        echo "The command for trimming would have been"
+        vips crop ${WORK_FOLDER}/uncropped.last.tif "$OUTPUT_IMAGE" 0 0 ${PTO_CROP_WIDTH} ${PTO_CROP_HEIGHT}
     else        
         echo "Trimming image to dimensions ${PTO_CROP_WIDTH}x${PTO_CROP_HEIGHT} and saving final image with command"
         echo "> vips crop ${WORK_FOLDER}/uncropped.last.tif \"$OUTPUT_IMAGE\" 0 0 ${PTO_CROP_WIDTH} ${PTO_CROP_HEIGHT}"
         vips crop ${WORK_FOLDER}/uncropped.last.tif "$OUTPUT_IMAGE" 0 0 ${PTO_CROP_WIDTH} ${PTO_CROP_HEIGHT}
+        if [[ ! -s "$OUTPUT_IMAGE" ]]; then
+            >&2 echo "Error: Output image $OUTPUT_IMAGE not produced"
+            exit 62
+        fi
     fi
-    if [[ ! -s "$OUTPUT_IMAGE" ]]; then
-        >&2 echo "Error: Output image $OUTPUT_IMAGE not produced"
-        exit 62
-    fi
+}
+
+# Requirements: IMAGES
+all_steps() {
+    create_slices
+    merge_slices
+    trim_image
 
     echo ""
     echo "Finished producing $OUTPUT_IMAGE at $(date +%Y%m%d-%H%M%S)"
@@ -273,5 +292,5 @@ check_parameters "$@"
 if [[ -z "$OUTPUT_IMAGE" ]]; then
     stats
 else
-    slice
+    all_steps
 fi
